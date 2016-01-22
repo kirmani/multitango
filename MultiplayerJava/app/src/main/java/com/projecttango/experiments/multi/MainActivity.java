@@ -15,11 +15,12 @@
  */
 package com.projecttango.experiments.multi;
 
-import java.util.ArrayList;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.widget.Toast;
 
 import com.google.atap.tangoservice.Tango;
@@ -33,6 +34,9 @@ import com.google.atap.tangoservice.TangoEvent;
 import com.google.atap.tangoservice.TangoOutOfDateException;
 import com.google.atap.tangoservice.TangoPoseData;
 import com.google.atap.tangoservice.TangoXyzIjData;
+import com.google.atap.tangoservice.TangoPoseData;
+
+import java.util.ArrayList;
 
 /**
  * An example showing the usage of TangoCameraPreview class
@@ -45,6 +49,7 @@ import com.google.atap.tangoservice.TangoXyzIjData;
  * the device camera.
  */
 public class MainActivity extends Activity {
+	private static final String TAG = "MultiplayerTango";
 	private TangoCameraPreview tangoCameraPreview;
 	private Tango mTango;
 	private boolean mIsConnected;
@@ -57,6 +62,13 @@ public class MainActivity extends Activity {
 		setContentView(tangoCameraPreview);
 	}
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main, menu);
+        return true;
+    }
+
 	// Camera Preview
 	private void startCameraPreview() {
 	    // Connect to color camera
@@ -64,21 +76,22 @@ public class MainActivity extends Activity {
 				TangoCameraIntrinsics.TANGO_CAMERA_COLOR);
 		// Use default configuration for Tango Service.
 		TangoConfig config = mTango.getConfig(TangoConfig.CONFIG_TYPE_DEFAULT);
+		config.putBoolean(TangoConfig.KEY_BOOLEAN_LEARNINGMODE, true);
 		mTango.connect(config);
 		mIsConnected = true;
 
-		// No need to add any coordinate frame pairs since we are not using
-		// pose data. So just initialize.
-		ArrayList<TangoCoordinateFramePair> framePairs = new ArrayList<TangoCoordinateFramePair>();
+		final ArrayList<TangoCoordinateFramePair> framePairs = new ArrayList<TangoCoordinateFramePair>();
+		framePairs.add(new TangoCoordinateFramePair(
+				TangoPoseData.COORDINATE_FRAME_START_OF_SERVICE,
+				TangoPoseData.COORDINATE_FRAME_DEVICE));
 		mTango.connectListener(framePairs, new OnTangoUpdateListener() {
 			@Override
 			public void onPoseAvailable(TangoPoseData pose) {
-				// We are not using OnPoseAvailable for this app
+				Log.d(TAG, pose.toString());
 			}
 
 			@Override
 			public void onFrameAvailable(int cameraId) {
-
 			    // Check if the frame available is for the camera we want and
 			    // update its frame on the camera preview.
 				if (cameraId == TangoCameraIntrinsics.TANGO_CAMERA_COLOR) {

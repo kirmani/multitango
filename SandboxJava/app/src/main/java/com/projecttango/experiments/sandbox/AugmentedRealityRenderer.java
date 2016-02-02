@@ -101,11 +101,18 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
         if (mPickedObject != null) {
             Vector3 displacementPosition = Vector3.subtractAndCreate(
                     cameraPose.getPosition(), getCurrentCamera().getPosition());
-            // Quaternion displacementOrientation = Quaternion.createFromRotationBetween(
-            //          cameraPose.getPosition(), getCurrentCamera().getPosition());
+            Vector3 distanceVector = Vector3.subtractAndCreate(
+                    mPickedObject.getPosition(), getCurrentCamera().getPosition());
+            Vector3 finalVector = new Vector3(distanceVector);
+            Quaternion transformationOrientation = new Quaternion(cameraPose.getOrientation());
+            transformationOrientation.multiply(getCurrentCamera().getOrientation().inverse());
+            finalVector.rotateBy(transformationOrientation);
+            displacementPosition.add(Vector3.subtractAndCreate(finalVector, distanceVector));
+            Quaternion displacementOrientation = new Quaternion(cameraPose.getOrientation());
+            displacementOrientation.subtract(getCurrentCamera().getOrientation());
+            mPickedObject.setRotation(
+                    mPickedObject.getOrientation().add(displacementOrientation));
             mPickedObject.setPosition(mPickedObject.getPosition().add(displacementPosition));
-            // mPickedObject.setOrientation(mPickedObject.getOrientation().add(
-            //            displacementOrientation));
         }
         getCurrentCamera().setRotation(cameraPose.getOrientation());
         getCurrentCamera().setPosition(cameraPose.getPosition());

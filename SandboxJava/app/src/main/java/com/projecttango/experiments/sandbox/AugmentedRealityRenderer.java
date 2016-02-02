@@ -27,6 +27,7 @@ import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
 import org.rajawali3d.materials.textures.ATexture;
 import org.rajawali3d.materials.textures.Texture;
+import org.rajawali3d.math.Quaternion;
 import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.Cube;
 import org.rajawali3d.util.ObjectColorPicker;
@@ -97,6 +98,15 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
      */
     public void updateRenderCameraPose(TangoPoseData devicePose, DeviceExtrinsics extrinsics) {
         Pose cameraPose = ScenePoseCalculator.toOpenGlCameraPose(devicePose, extrinsics);
+        if (mPickedObject != null) {
+            Vector3 displacementPosition = Vector3.subtractAndCreate(
+                    cameraPose.getPosition(), getCurrentCamera().getPosition());
+            // Quaternion displacementOrientation = Quaternion.createFromRotationBetween(
+            //          cameraPose.getPosition(), getCurrentCamera().getPosition());
+            mPickedObject.setPosition(mPickedObject.getPosition().add(displacementPosition));
+            // mPickedObject.setOrientation(mPickedObject.getOrientation().add(
+            //            displacementOrientation));
+        }
         getCurrentCamera().setRotation(cameraPose.getOrientation());
         getCurrentCamera().setPosition(cameraPose.getPosition());
     }

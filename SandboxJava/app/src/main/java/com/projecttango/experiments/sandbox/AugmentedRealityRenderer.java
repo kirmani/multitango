@@ -37,9 +37,6 @@ import com.projecttango.rajawali.Pose;
 import com.projecttango.rajawali.ScenePoseCalculator;
 import com.projecttango.rajawali.ar.TangoRajawaliRenderer;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Very simple example augmented reality renderer which displays a cube fixed in place.
  * Whenever the user clicks on the screen, the cube is placed flush with the surface detected

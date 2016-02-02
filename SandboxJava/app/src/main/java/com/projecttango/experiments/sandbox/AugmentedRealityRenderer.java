@@ -29,7 +29,7 @@ import org.rajawali3d.materials.textures.ATexture;
 import org.rajawali3d.materials.textures.Texture;
 import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.Cube;
-import org.rajawali3d.util.RayPicker;
+import org.rajawali3d.util.ObjectColorPicker;
 import org.rajawali3d.util.OnObjectPickedListener;
 
 import com.projecttango.rajawali.DeviceExtrinsics;
@@ -60,9 +60,9 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
     private static final String TAG = "AugmentedRealityRenderer";
     private static final float CUBE_SIDE_LENGTH = 0.5f;
 
-    private RayPicker mPicker;
+    private ObjectColorPicker mPicker;
+    private Object3D mPickedObject = null;
     private boolean mReadyToAddObject = false;
-    private boolean mReadyToPickObject = false;
 
     public AugmentedRealityRenderer(Context context) {
         super(context);
@@ -81,43 +81,15 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
         light.setPosition(3, 2, 4);
         getCurrentScene().addLight(light);
 
-        mPicker = new RayPicker(this);
+        mPicker = new ObjectColorPicker(this);
         mPicker.setOnObjectPickedListener(this);
     }
 
     @Override
     protected void onRender(long elapsedRealTime, double deltaTime) {
         super.onRender(elapsedRealTime, deltaTime);
-        if (mReadyToPickObject) {
-            dragObject();
-            mReadyToPickObject = false;
-        } else if (mReadyToAddObject) {
-            addObject();
-            mReadyToAddObject = false;
-        }
+        handleTouch();
     }
-
-    private void addObject() {
-        Object3D object = new Cube(CUBE_SIDE_LENGTH);
-        Material material = new Material();
-        material.setColor(0xff009900);
-        try {
-            Texture t = new Texture("instructions", R.drawable.instructions);
-            material.addTexture(t);
-        } catch (ATexture.TextureException e) {
-            e.printStackTrace();
-        }
-        material.setColorInfluence(0.1f);
-        material.enableLighting(true);
-        material.setDiffuseMethod(new DiffuseMethod.Lambert());
-        object.setMaterial(material);
-        object.setPosition(getCurrentCamera().getPosition());
-        object.setOrientation(getCurrentCamera().getOrientation());
-        object.moveForward(-1.0f);
-        getCurrentScene().addChild(object);
-    }
-
-    private void dragObject() {}
 
     /**
      * Update the scene camera based on the provided pose in Tango start of service frame.
@@ -140,15 +112,58 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
 
     @Override
     public void onTouchEvent(MotionEvent event) {
-        mReadyToAddObject = true;
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            getObjectAtCenter();
+            mReadyToAddObject = true;
+        } else if (event.getAction() ==  MotionEvent.ACTION_UP) {
+            stopMovingPickedObject();
+        }
     }
 
     @Override
     public void onObjectPicked(Object3D object) {
-        mReadyToPickObject = true;
+        mPickedObject = object;
+        Log.d(TAG, "Object picked!");
     }
 
-    public void getObjectAt(float x, float y) {
-        mPicker.getObjectAt(x, y);
+    private void getObjectAtCenter() {
+        mPicker.getObjectAt(MotionEvent.AXIS_X, MotionEvent.AXIS_Y);
     }
+
+    private void handleTouch() {
+        if (mPickedObject == null) {
+            if (mReadyToAddObject) {
+                addObject();
+            }
+        } else {
+            Log.d(TAG, "Moving Object!");
+        }
+        mReadyToAddObject = false;
+    }
+
+    private void stopMovingPickedObject() {
+        mPickedObject = null;
+    }
+
+    private void addObject() {
+        Object3D object = new Cube(CUBE_SIDE_LENGTH);
+        Material material = new Material();
+        material.setColor(0xff009900);
+        try {
+            Texture t = new Texture("instructions", R.drawable.instructions);
+            material.addTexture(t);
+        } catch (ATexture.TextureException e) {
+            e.printStackTrace();
+        }
+        material.setColorInfluence(0.1f);
+        material.enableLighting(true);
+        material.setDiffuseMethod(new DiffuseMethod.Lambert());
+        object.setMaterial(material);
+        object.setPosition(getCurrentCamera().getPosition());
+        object.setOrientation(getCurrentCamera().getOrientation());
+        object.moveForward(-1.0f);
+        mPicker.registerObject(object);
+        getCurrentScene().addChild(object);
+    }
+
 }

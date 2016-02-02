@@ -261,10 +261,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
 
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
-        if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
-            // mRenderer.getObjectAt(motionEvent.getX(), motionEvent.getY());
-            mRenderer.onTouchEvent(motionEvent);
-        }
+        mRenderer.onTouchEvent(motionEvent);
         return true;
     }
 

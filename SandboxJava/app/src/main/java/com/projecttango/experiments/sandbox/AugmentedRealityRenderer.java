@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.projecttango.experiments.sandbox;
 
 import android.content.Context;
@@ -22,6 +23,7 @@ import android.view.MotionEvent;
 import com.google.atap.tangoservice.TangoPoseData;
 
 import org.rajawali3d.Object3D;
+import org.rajawali3d.cameras.Camera;
 import org.rajawali3d.lights.DirectionalLight;
 import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
@@ -61,9 +63,12 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
     private ObjectColorPicker mPicker;
     private Object3D mPickedObject = null;
     private boolean mReadyToAddObject = false;
+    private Reticle mReticle;
+    private PoseTracker mLastPose;
 
     public AugmentedRealityRenderer(Context context) {
         super(context);
+        mReticle = new Reticle(context);
     }
 
     @Override
@@ -81,12 +86,19 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
 
         mPicker = new ObjectColorPicker(this);
         mPicker.setOnObjectPickedListener(this);
+
+        mLastPose = new PoseTracker(getCurrentCamera().getPosition(),
+                getCurrentCamera().getOrientation());
     }
 
     @Override
     protected void onRender(long elapsedRealTime, double deltaTime) {
         super.onRender(elapsedRealTime, deltaTime);
         handleTouch();
+
+        // update previous camera pose in the end of render cycle
+        mLastPose.setOrientation(getCurrentCamera().getOrientation());
+        mLastPose.setPosition(getCurrentCamera().getPosition());
     }
 
     /**
@@ -97,25 +109,9 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
      * NOTE: This must be called from the OpenGL render thread - it is not thread safe.
      */
     public void updateRenderCameraPose(TangoPoseData devicePose, DeviceExtrinsics extrinsics) {
-        Pose cameraPose = ScenePoseCalculator.toOpenGlCameraPose(devicePose, extrinsics);
-        if (mPickedObject != null) {
-            Vector3 displacementPosition = Vector3.subtractAndCreate(
-                    cameraPose.getPosition(), getCurrentCamera().getPosition());
-            Vector3 distanceVector = Vector3.subtractAndCreate(
-                    mPickedObject.getPosition(), getCurrentCamera().getPosition());
-            Vector3 finalVector = new Vector3(distanceVector);
-            Quaternion transformationOrientation = new Quaternion(cameraPose.getOrientation());
-            transformationOrientation.multiply(getCurrentCamera().getOrientation().inverse());
-            finalVector.rotateBy(transformationOrientation);
-            displacementPosition.add(Vector3.subtractAndCreate(finalVector, distanceVector));
-            Quaternion displacementOrientation = new Quaternion(cameraPose.getOrientation());
-            displacementOrientation.subtract(getCurrentCamera().getOrientation());
-            mPickedObject.setRotation(
-                    mPickedObject.getOrientation().add(displacementOrientation));
-            mPickedObject.setPosition(mPickedObject.getPosition().add(displacementPosition));
-        }
-        getCurrentCamera().setRotation(cameraPose.getOrientation());
-        getCurrentCamera().setPosition(cameraPose.getPosition());
+        Pose currentPose = ScenePoseCalculator.toOpenGlCameraPose(devicePose, extrinsics);
+        getCurrentCamera().setRotation(currentPose.getOrientation());
+        getCurrentCamera().setPosition(currentPose.getPosition());
     }
 
     @Override
@@ -141,7 +137,7 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
     }
 
     private void getObjectAtCenter() {
-        mPicker.getObjectAt(MotionEvent.AXIS_X, MotionEvent.AXIS_Y);
+        mPicker.getObjectAt(mReticle.getX(), mReticle.getY());
     }
 
     private void handleTouch() {
@@ -151,6 +147,7 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
             }
         } else {
             Log.d(TAG, "Moving Object!");
+            movePickedObject();
         }
         mReadyToAddObject = false;
     }
@@ -180,4 +177,24 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
         getCurrentScene().addChild(object);
     }
 
+    private synchronized void movePickedObject() {
+        // rotate object with camera
+        Quaternion rotation = getCurrentCamera().getOrientation().clone();
+        rotation.multiply(mLastPose.getOrientation().clone().inverse());
+
+        // move object with camera movement
+        Vector3 displacementPosition = Vector3.subtractAndCreate(
+                getCurrentCamera().getPosition(), mLastPose.getPosition());
+
+        // move object to where you're looking
+        Vector3 distanceVector = Vector3.subtractAndCreate(
+                mPickedObject.getPosition(), mLastPose.getPosition());
+        Vector3 finalVector = new Vector3(distanceVector);
+        finalVector.rotateBy(rotation);
+        displacementPosition.add(Vector3.subtractAndCreate(finalVector, distanceVector));
+
+        // set updated object's rotation and position
+        mPickedObject.setRotation(mPickedObject.getOrientation().clone().multiply(rotation));
+        mPickedObject.setPosition(mPickedObject.getPosition().clone().add(displacementPosition));
+    }
 }

@@ -15,12 +15,12 @@ public class PoseTracker {
     private Quaternion mOrientation;
 
     public PoseTracker(Vector3 position, Quaternion orientation) {
-        mPosition = new Vector3(position);
-        mOrientation = new Quaternion(orientation);
+        mPosition = position.clone();
+        mOrientation = orientation.clone();
     }
 
     public void setPosition(Vector3 position) {
-        mPosition = new Vector3(position);
+        mPosition = position.clone();
     }
 
     public Vector3 getPosition() {
@@ -28,7 +28,7 @@ public class PoseTracker {
     }
 
     public void setOrientation(Quaternion orientation) {
-        mOrientation = new Quaternion(orientation);
+        mOrientation = orientation.clone();
     }
 
     public Quaternion getOrientation() {

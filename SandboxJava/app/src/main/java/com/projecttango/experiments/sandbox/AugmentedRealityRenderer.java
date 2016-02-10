@@ -17,6 +17,7 @@
 package com.projecttango.experiments.sandbox;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.util.Log;
 import android.view.MotionEvent;
 
@@ -29,9 +30,12 @@ import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
 import org.rajawali3d.materials.textures.ATexture;
 import org.rajawali3d.materials.textures.Texture;
+import org.rajawali3d.math.MathUtil;
+import org.rajawali3d.math.Matrix4;
 import org.rajawali3d.math.Quaternion;
 import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.Cube;
+import org.rajawali3d.primitives.Sphere;
 import org.rajawali3d.util.ObjectColorPicker;
 import org.rajawali3d.util.OnObjectPickedListener;
 
@@ -39,6 +43,8 @@ import com.projecttango.rajawali.DeviceExtrinsics;
 import com.projecttango.rajawali.Pose;
 import com.projecttango.rajawali.ScenePoseCalculator;
 import com.projecttango.rajawali.ar.TangoRajawaliRenderer;
+
+import java.util.Random;
 
 /**
  * Very simple example augmented reality renderer which displays a cube fixed in place.
@@ -59,16 +65,20 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
         implements OnObjectPickedListener {
     private static final String TAG = "AugmentedRealityRenderer";
     private static final float CUBE_SIDE_LENGTH = 0.5f;
+    private static final int SPHERE_DIVISIONS = 20;
+    private static final float SPHERE_RADIUS = 0.25f;
 
     private ObjectColorPicker mPicker;
     private Object3D mPickedObject = null;
-    private boolean mReadyToAddObject = false;
-    private Reticle mReticle;
+    private Quaternion mPickedObjectOrientation = null;
     private PoseTracker mLastPose;
+    private Random mRandom;
+
+    private static final int[] OBJECT_COLORS =
+    {Color.BLUE, Color.CYAN, Color.GREEN, Color.MAGENTA, Color.RED, Color.YELLOW};
 
     public AugmentedRealityRenderer(Context context) {
         super(context);
-        mReticle = new Reticle(context);
     }
 
     @Override
@@ -76,6 +86,7 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
         // Remember to call super.initScene() to allow TangoRajawaliArRenderer
         // to be set-up.
         super.initScene();
+        mRandom = new Random();
 
         // Add a directional light in an arbitrary direction.
         DirectionalLight light = new DirectionalLight(1, 0.2, -1);
@@ -94,11 +105,6 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
     @Override
     protected void onRender(long elapsedRealTime, double deltaTime) {
         super.onRender(elapsedRealTime, deltaTime);
-        handleTouch();
-
-        // update previous camera pose in the end of render cycle
-        mLastPose.setOrientation(getCurrentCamera().getOrientation());
-        mLastPose.setPosition(getCurrentCamera().getPosition());
     }
 
     /**
@@ -109,6 +115,10 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
      * NOTE: This must be called from the OpenGL render thread - it is not thread safe.
      */
     public void updateRenderCameraPose(TangoPoseData devicePose, DeviceExtrinsics extrinsics) {
+        // update previous camera pose in the end of render cycle
+        mLastPose.setOrientation(getCurrentCamera().getOrientation());
+        mLastPose.setPosition(getCurrentCamera().getPosition());
+
         Pose currentPose = ScenePoseCalculator.toOpenGlCameraPose(devicePose, extrinsics);
         getCurrentCamera().setRotation(currentPose.getOrientation());
         getCurrentCamera().setPosition(currentPose.getPosition());
@@ -121,51 +131,37 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
     }
 
     @Override
-    public void onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            getObjectAtCenter();
-            mReadyToAddObject = true;
-        } else if (event.getAction() ==  MotionEvent.ACTION_UP) {
-            stopMovingPickedObject();
-        }
-    }
+    public void onTouchEvent(MotionEvent event) {}
 
     @Override
     public void onObjectPicked(Object3D object) {
         mPickedObject = object;
+        mPickedObjectOrientation = object.getOrientation().clone();
+        mPickedObjectOrientation.multiply(mLastPose.getOrientation().clone().inverse());
         Log.d(TAG, "Object picked!");
     }
 
-    private void getObjectAtCenter() {
-        mPicker.getObjectAt(mReticle.getX(), mReticle.getY());
+    public void pickObject(float x, float y) {
+        mPicker.getObjectAt(x, y);
     }
 
-    private void handleTouch() {
-        if (mPickedObject == null) {
-            if (mReadyToAddObject) {
-                addObject();
-            }
-        } else {
-            Log.d(TAG, "Moving Object!");
-            movePickedObject();
-        }
-        mReadyToAddObject = false;
-    }
-
-    private void stopMovingPickedObject() {
+    public void unpickObject() {
         mPickedObject = null;
     }
 
-    private void addObject() {
-        Object3D object = new Cube(CUBE_SIDE_LENGTH);
+    public Object3D getPickedObject() {
+        return mPickedObject;
+    }
+
+    public PoseTracker getLastPose() {
+        return mLastPose;
+    }
+
+    public void addObject() {
+        Object3D object = (mRandom.nextInt(1) % 2 == 0) ? new Cube(CUBE_SIDE_LENGTH)
+            : new Sphere(SPHERE_RADIUS, SPHERE_DIVISIONS, SPHERE_DIVISIONS);
         Material material = new Material();
-        material.setColor(0xff009900);
-        try {
-            Texture t = new Texture("instructions", R.drawable.instructions);
-            material.addTexture(t);
-        } catch (ATexture.TextureException e) {
-            e.printStackTrace();
-        }
+        material.setColor(OBJECT_COLORS[mRandom.nextInt(OBJECT_COLORS.length)]);
         material.setColorInfluence(0.1f);
         material.enableLighting(true);
         material.setDiffuseMethod(new DiffuseMethod.Lambert());
@@ -177,24 +173,31 @@ public class AugmentedRealityRenderer extends TangoRajawaliRenderer
         getCurrentScene().addChild(object);
     }
 
-    private synchronized void movePickedObject() {
-        // rotate object with camera
-        Quaternion rotation = getCurrentCamera().getOrientation().clone();
-        rotation.multiply(mLastPose.getOrientation().clone().inverse());
+    public synchronized void movePickedObject() {
+        if (mPickedObject != null) {
+            // move object to where you're looking
+            Vector3 objectPosition = Vector3.subtractAndCreate(
+                    mPickedObject.getPosition(), mLastPose.getPosition());
+            Vector3 initialForward = new Vector3(0.0, 0.0, 1.0);
+            initialForward.normalize();
+            initialForward.rotateBy(mLastPose.getOrientation().clone());
+            Vector3 finalForward = new Vector3(0.0, 0.0, 1.0);
+            finalForward.normalize();
+            finalForward.rotateBy(getCurrentCamera().getOrientation().clone());
 
-        // move object with camera movement
-        Vector3 displacementPosition = Vector3.subtractAndCreate(
-                getCurrentCamera().getPosition(), mLastPose.getPosition());
+            Quaternion rotation = new Quaternion();
+            rotation.fromRotationBetween(finalForward, initialForward);
 
-        // move object to where you're looking
-        Vector3 distanceVector = Vector3.subtractAndCreate(
-                mPickedObject.getPosition(), mLastPose.getPosition());
-        Vector3 finalVector = new Vector3(distanceVector);
-        finalVector.rotateBy(rotation);
-        displacementPosition.add(Vector3.subtractAndCreate(finalVector, distanceVector));
+            Vector3 lookAt = new Vector3(0.0, 0.0, 1.0);
+            lookAt.rotateBy(mPickedObject.getOrientation().clone());
+            lookAt.add(objectPosition);
+            objectPosition.rotateBy(rotation.clone());
+            lookAt.rotateBy(rotation.clone());
 
-        // set updated object's rotation and position
-        mPickedObject.setRotation(mPickedObject.getOrientation().clone().multiply(rotation));
-        mPickedObject.setPosition(mPickedObject.getPosition().clone().add(displacementPosition));
+            // TODO(kirmani): Set object rotation/orientation relative to camera orientation
+            // set updated object's rotation and positiona
+            mPickedObject.setPosition(getCurrentCamera().getPosition().clone().add(objectPosition));
+            mPickedObject.setLookAt(getCurrentCamera().getPosition().clone().add(lookAt));
+        }
     }
 }

@@ -34,16 +34,21 @@ import com.google.atap.tangoservice.TangoOutOfDateException;
 import com.google.atap.tangoservice.TangoPoseData;
 import com.google.atap.tangoservice.TangoXyzIjData;
 
+
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.projecttango.rajawali.DeviceExtrinsics;
+import com.projecttango.rajawali.Pose;
 import com.projecttango.rajawali.ScenePoseCalculator;
 import com.projecttango.rajawali.ar.TangoRajawaliView;
 import com.projecttango.tangosupport.TangoPointCloudManager;
 import com.projecttango.tangosupport.TangoSupport;
 import com.projecttango.tangosupport.TangoSupport.IntersectionPointPlaneModelPair;
 
+import org.rajawali3d.Object3D;
+import org.rajawali3d.math.Quaternion;
+import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.scene.ASceneFrameCallback;
 
 /**
@@ -86,6 +91,9 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     private AtomicBoolean mIsConnected = new AtomicBoolean(false);
     private double mCameraPoseTimestamp = 0;
 
+    private Reticle mReticle;
+    private boolean mActionDownHandled = true;
+
     public static final TangoCoordinateFramePair FRAME_PAIR = new TangoCoordinateFramePair(
             TangoPoseData.COORDINATE_FRAME_START_OF_SERVICE,
             TangoPoseData.COORDINATE_FRAME_DEVICE);
@@ -93,6 +101,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mReticle = new Reticle(this);
         mGLView = new TangoRajawaliView(this);
         mRenderer = new AugmentedRealityRenderer(this);
         mGLView.setSurfaceRenderer(mRenderer);
@@ -141,6 +150,9 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         config.putBoolean(
                 TangoConfig.KEY_BOOLEAN_LOWLATENCYIMUINTEGRATION, true);
         config.putBoolean(TangoConfig.KEY_BOOLEAN_DEPTH, true);
+        config.putBoolean(TangoConfig.KEY_BOOLEAN_SMOOTH_POSE, true);
+        config.putBoolean(TangoConfig.KEY_BOOLEAN_HIGH_RATE_POSE, true);
+        config.putBoolean(TangoConfig.KEY_BOOLEAN_LEARNINGMODE, true);
         mTango.connect(config);
 
         // No need to add any coordinate frame pairs since we are not
@@ -217,6 +229,16 @@ public class MainActivity extends Activity implements View.OnTouchListener {
                     } else {
                         Log.w(TAG, "Unable to get device pose at time: " + rgbTimestamp);
                     }
+                    Object3D pickedObject = mRenderer.getPickedObject();
+                    if (pickedObject != null) {
+                        mRenderer.movePickedObject();
+                    }
+                    if (!mActionDownHandled) {
+                        mActionDownHandled = true;
+                        if (pickedObject == null) {
+                            mRenderer.addObject();
+                        }
+                    }
                 }
             }
 
@@ -260,8 +282,13 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     }
 
     @Override
-    public boolean onTouch(View view, MotionEvent motionEvent) {
-        mRenderer.onTouchEvent(motionEvent);
+    public boolean onTouch(View view, MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            mRenderer.pickObject(mReticle.getX(), mReticle.getY());
+            mActionDownHandled = false;
+        } else if (event.getAction() == MotionEvent.ACTION_UP) {
+            mRenderer.unpickObject();
+        }
         return true;
     }
 
